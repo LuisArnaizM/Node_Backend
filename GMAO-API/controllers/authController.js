@@ -51,7 +51,6 @@ class AuthController {
   // GET /api/auth/verify - Verificar token (opcional)
   async verifyToken(req, res, next) {
     try {
-      // Si llegamos aquí, el token es válido (pasó por el middleware de auth)
       res.json({
         success: true,
         message: 'Token válido',
