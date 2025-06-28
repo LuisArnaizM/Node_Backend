@@ -10,11 +10,11 @@ const redisClient = redis.createClient({
 
 // Configuración de eventos
 redisClient.on('connect', () => {
-  console.log('✅ Conectado a Redis');
+  console.log('Conectado a Redis');
 });
 
 redisClient.on('error', (err) => {
-  console.error('❌ Error de conexión a Redis:', err);
+  console.error('Error de conexión a Redis:', err);
 });
 
 // Función para conectar a Redis
@@ -22,7 +22,7 @@ const connectRedis = async () => {
   try {
     await redisClient.connect();
   } catch (error) {
-    console.error('❌ No se pudo conectar a Redis:', error);
+    console.error('No se pudo conectar a Redis:', error);
   }
 };
 
