@@ -90,8 +90,6 @@ Este proyecto ha evolucionado desde el trabajo inicial de **"Librerías de Backe
 
 El servidor estará disponible en `http://localhost:3000`
 
-> **📝 Nota:** Ambas versiones pueden ejecutarse, manteniendo compatibilidad con el trabajo anterior.
-
 ## 📁 Estructura del Proyecto
 
 ### Estructura Original (mantenida)
@@ -126,19 +124,14 @@ GMAO-API/
 │   └── redis.js                  # 🆕 Redis config + helpers
 ├── controllers/
 │   ├── authController.js         # (sin cambios)
-│   ├── workOrderController.js    # (versión original)
 │   └── workOrderControllerDB.js  # 🆕 Controlador con BD + Cache
 ├── models/
-│   ├── WorkOrder.js              # (versión original)
 │   └── WorkOrderSequelize.js     # 🆕 Modelo Sequelize
 ├── routes/
 │   ├── authRoutes.js             # (sin cambios)
-│   ├── workOrderRoutes.js        # (versión original)
 │   └── workOrderRoutesDB.js      # 🆕 Rutas con BD
-├── server.js                     # (versión original)
-├── server-db.js                  # 🆕 Servidor con BD + Redis
-├── test-api-db.sh               # 🆕 Script de pruebas
-└── README-DB.md                 # 🆕 Doc. detallada
+├── server.js                  # 🆕 Servidor con BD + 
+└── README.md                 # 🆕 Doc. detallada
 ```
 
 ## 🔐 Autenticación
@@ -181,8 +174,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 ## 📚 Endpoints de la API
-
-> **📝 Nota:** Los endpoints originales del trabajo "Librerías de Backend" se mantienen sin cambios. Las nuevas funcionalidades añaden capacidades adicionales.
 
 ### 🏠 Inicio
 - **GET** `/` - Información de la API (🆕 incluye información de versiones)
@@ -248,14 +239,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "updatedAt": "2025-06-28T15:45:00.000Z"
 }
 ```
-
-**🔄 Cambios principales:**
-- ✅ Campos renombrados para consistencia (title, status, assignedTo)
-- ✅ Nuevos campos: priority, estimatedHours, actualHours, equipmentId, location, cost
-- ✅ Estado "cancelada" agregado
-- ✅ Sistema de prioridades implementado
-- ✅ Campos de fecha más específicos (dueDate, completedAt)
-- ✅ Validaciones mejoradas a nivel de base de datos
 
 ## 🧪 Ejemplos de Uso
 
