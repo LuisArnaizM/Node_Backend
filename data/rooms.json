@@ -1,0 +1,27 @@
+[
+  {
+    "id": "sala-001",
+    "nombre": "Sala de Estudio A",
+    "capacidad": 4
+  },
+  {
+    "id": "sala-002",
+    "nombre": "Sala de Estudio B",
+    "capacidad": 6
+  },
+  {
+    "id": "sala-003",
+    "nombre": "Sala de Conferencias",
+    "capacidad": 12
+  },
+  {
+    "id": "sala-004",
+    "nombre": "Sala Silenciosa",
+    "capacidad": 2
+  },
+  {
+    "id": "sala-005",
+    "nombre": "Sala de Trabajo Grupal",
+    "capacidad": 8
+  }
+]

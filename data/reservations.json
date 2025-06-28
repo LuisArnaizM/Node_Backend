@@ -1,0 +1,13 @@
+[
+  {
+    "id": "res-1751132346703-1ahpxxfgy",
+    "roomId": "sala-001",
+    "nombreSala": "Sala de Estudio A",
+    "fecha": "2025-06-29",
+    "horaInicio": "09:00",
+    "horaFin": "11:00",
+    "nombreUsuario": "Juan Pérez",
+    "numeroPersonas": 3,
+    "fechaCreacion": "2025-06-28T17:39:06.703Z"
+  }
+]
