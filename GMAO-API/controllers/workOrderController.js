@@ -1,7 +1,6 @@
 const WorkOrder = require('../models/WorkOrder');
 
 class WorkOrderController {
-  // GET /api/work-orders - Obtener todas las órdenes
   async getAllOrders(req, res, next) {
     try {
       const { estado, tecnico } = req.query;
@@ -25,7 +24,6 @@ class WorkOrderController {
     }
   }
 
-  // GET /api/work-orders/:id - Obtener una orden por ID
   async getOrderById(req, res, next) {
     try {
       const { id } = req.params;
@@ -48,7 +46,6 @@ class WorkOrderController {
     }
   }
 
-  // POST /api/work-orders - Crear nueva orden
   async createOrder(req, res, next) {
     try {
       const orderData = req.body;
@@ -64,7 +61,6 @@ class WorkOrderController {
     }
   }
 
-  // PUT /api/work-orders/:id - Actualizar orden
   async updateOrder(req, res, next) {
     try {
       const { id } = req.params;
@@ -90,7 +86,6 @@ class WorkOrderController {
     }
   }
 
-  // DELETE /api/work-orders/:id - Eliminar orden
   async deleteOrder(req, res, next) {
     try {
       const { id } = req.params;
