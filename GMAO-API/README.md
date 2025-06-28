@@ -1,5 +1,5 @@
 # GMAO API - Sistema de Gestión de Órdenes de Trabajo
-## Documento Técnico y Análisis del Desarrollo
+## Memoria Técnica del Desarrollo
 
 **Autor:** Luis Arnaiz  
 **Fecha:** 28 de junio de 2025  
@@ -8,32 +8,30 @@
 
 ---
 
-## 1. Resumen Ejecutivo
+## 1. Introducción
 
-Este documento presenta el desarrollo de una API REST para la gestión de órdenes de trabajo en un sistema GMAO (Gestión de Mantenimiento Asistido por Ordenador), implementada utilizando Node.js y Express.js. El proyecto abarca la implementación completa de operaciones CRUD, autenticación JWT, validación de datos, y arquitectura de middlewares, siguiendo las mejores prácticas de desarrollo backend.
+Este documento presenta el desarrollo de una API REST para la gestión de órdenes de trabajo en un sistema GMAO, implementada con Node.js y Express.js. El proyecto se centra en la aplicación práctica de conceptos de desarrollo backend, especialmente en la implementación de middlewares personalizados y arquitectura en capas.
 
-### 1.1 Objetivos del Proyecto
+### 1.1 Objetivos Realizados
 
-- Desarrollar una API REST funcional para gestión de órdenes de trabajo
-- Implementar un sistema de autenticación seguro basado en JWT
-- Aplicar patrones de arquitectura limpia con separación de responsabilidades
-- Implementar validación robusta de datos de entrada
-- Crear un sistema de logging y manejo de errores centralizado
+- ✅ API REST funcional con operaciones CRUD completas
+- ✅ Sistema de autenticación JWT con middlewares personalizados  
+- ✅ Validación robusta de datos con Joi
+- ✅ Arquitectura modular con separación de responsabilidades
+- ✅ Sistema de logging y manejo centralizado de errores
 
-### 1.2 Tecnologías Implementadas
+### 1.2 Stack Tecnológico
 
-- **Runtime:** Node.js v14+
-- **Framework:** Express.js 4.x
-- **Autenticación:** JSON Web Tokens (JWT)
-- **Validación:** Joi
-- **Persistencia:** Sistema de archivos JSON
-- **Middlewares:** Personalizados para autenticación, logging y validación
+- **Node.js + Express.js** - Servidor y framework web
+- **JSON Web Tokens** - Autenticación stateless
+- **Joi** - Validación de esquemas
+- **Sistema de archivos JSON** - Persistencia de datos
 
-## 2. Análisis de la Arquitectura del Sistema
+## 2. Arquitectura del Sistema
 
-### 2.1 Patrón Arquitectónico Implementado
+### 2.1 Estructura del Proyecto
 
-El proyecto sigue una arquitectura en capas basada en el patrón MVC (Modelo-Vista-Controlador) adaptado para APIs REST:
+El proyecto implementa una arquitectura en capas siguiendo el patrón MVC adaptado para APIs:
 
 ```
 ┌─────────────────┐
@@ -97,124 +95,307 @@ const token = jwt.sign(
 
 #### 3.1.2 Middleware de Autenticación
 ```javascript
-// Verificación de token en auth.js
-const token = req.headers.authorization?.split(' ')[1];
-const decoded = jwt.verify(token, process.env.JWT_SECRET);
+const logger = (req, res, next) => {
+    const timestamp = new Date().toISOString();
+    const method = req.method;
+    const url = req.originalUrl;
+    const ip = req.ip || req.connection.remoteAddress;
+    
+    console.log(`[${timestamp}] ${method} ${url} - IP: ${ip}`);
+    
+    // Log del tiempo de respuesta
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        console.log(`[${timestamp}] ${method} ${url} - ${res.statusCode} - ${duration}ms`);
+    });
+    
+    next();
+};
+
+module.exports = logger;
 ```
 
 **Características implementadas:**
-- Extracción automática del header Authorization
-- Validación de formato Bearer
-- Manejo de errores de token expirado/inválido
-- Inyección de datos de usuario en el request
+- ✅ Timestamp de cada petición
+- ✅ Método HTTP y URL solicitada  
+- ✅ Dirección IP del cliente
+- ✅ Tiempo de respuesta en milisegundos
+- ✅ Código de estado HTTP de respuesta
 
-### 3.2 Validación de Datos con Joi
+### 3.2 Middleware de Autenticación (`auth.js`)
 
-#### 3.2.1 Esquemas de Validación
+**Propósito:** Verificar tokens JWT en rutas protegidas y extraer información del usuario.
+
 ```javascript
+const jwt = require('jsonwebtoken');
+
+const authenticateToken = (req, res, next) => {
+    // Extraer token del header Authorization
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // "Bearer TOKEN"
+    
+    if (!token) {
+        return res.status(401).json({
+            error: 'Token de acceso requerido',
+            message: 'Debe proporcionar un token válido para acceder a este recurso'
+        });
+    }
+    
+    try {
+        // Verificar y decodificar el token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Inyectar datos del usuario en el request
+        req.user = decoded;
+        
+        next(); // Continuar con el siguiente middleware
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                error: 'Token expirado',
+                message: 'El token ha expirado, por favor inicie sesión nuevamente'
+            });
+        }
+        
+        return res.status(403).json({
+            error: 'Token inválido',
+            message: 'El token proporcionado no es válido'
+        });
+    }
+};
+
+module.exports = authenticateToken;
+```
+
+**Análisis técnico:**
+- ✅ **Extracción segura:** Maneja casos donde no existe el header Authorization
+- ✅ **Validación robusta:** Diferencia entre token expirado e inválido
+- ✅ **Inyección de contexto:** Añade información del usuario al objeto request
+- ✅ **Respuestas específicas:** Mensajes de error claros para diferentes escenarios
+
+### 3.3 Middleware de Validación (`validation.js`)
+
+**Propósito:** Validar datos de entrada usando esquemas Joi antes de llegar al controlador.
+
+```javascript
+const Joi = require('joi');
+
 // Esquema para órdenes de trabajo
 const workOrderSchema = Joi.object({
-  titulo: Joi.string().min(3).required(),
-  descripcion: Joi.string().optional(),
-  fecha_programada: Joi.date().iso().required(),
-  estado: Joi.string().valid('pendiente', 'en_progreso', 'finalizada'),
-  tecnico: Joi.string().optional()
+    titulo: Joi.string()
+        .min(3)
+        .max(100)
+        .required()
+        .messages({
+            'string.min': 'El título debe tener al menos 3 caracteres',
+            'string.max': 'El título no puede superar los 100 caracteres',
+            'any.required': 'El título es obligatorio'
+        }),
+    descripcion: Joi.string()
+        .max(500)
+        .optional()
+        .allow(''),
+    fecha_programada: Joi.date()
+        .iso()
+        .required()
+        .messages({
+            'date.format': 'La fecha debe estar en formato ISO (YYYY-MM-DD)',
+            'any.required': 'La fecha programada es obligatoria'
+        }),
+    estado: Joi.string()
+        .valid('pendiente', 'en_progreso', 'finalizada')
+        .default('pendiente'),
+    tecnico: Joi.string()
+        .max(100)
+        .optional()
+        .allow('')
 });
-```
 
-**Ventajas de la implementación:**
-- Validación declarativa y legible
-- Mensajes de error específicos y localizados
-- Validación tanto de tipos como de formato
-- Soporte para campos opcionales y requeridos
-
-### 3.3 Persistencia de Datos
-
-#### 3.3.1 Sistema de Archivos JSON
-La aplicación utiliza persistencia en archivo JSON como alternativa ligera a bases de datos:
-
-```javascript
-// Operaciones de lectura/escritura sincronizadas
-const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
-fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2));
-```
-
-**Consideraciones técnicas:**
-- Operaciones síncronas para garantizar consistencia
-- Formateo JSON legible para debugging
-- Manejo de errores de E/O
-- Backup automático en operaciones críticas
-
-### 3.4 Manejo de Errores Centralizado
-
-#### 3.4.1 Middleware de Error Global
-```javascript
-const errorHandler = (err, req, res, next) => {
-  logger.error(`Error: ${err.message}`);
-  
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      error: 'Error de validación',
-      message: err.message
+// Factory function para crear middleware de validación
+const validateWorkOrder = (req, res, next) => {
+    const { error, value } = workOrderSchema.validate(req.body, {
+        abortEarly: false, // Mostrar todos los errores, no solo el primero
+        allowUnknown: false, // No permitir campos no definidos
+        stripUnknown: true // Eliminar campos no definidos
     });
-  }
-  
-  // Error genérico del servidor
-  res.status(500).json({
-    error: 'Error interno del servidor',
-    message: 'Ha ocurrido un error inesperado'
-  });
+    
+    if (error) {
+        const errors = error.details.map(detail => ({
+            field: detail.path.join('.'),
+            message: detail.message,
+            value: detail.context.value
+        }));
+        
+        return res.status(400).json({
+            error: 'Error de validación',
+            message: 'Los datos enviados no cumplen con el formato requerido',
+            details: errors
+        });
+    }
+    
+    // Reemplazar req.body con los datos validados y limpiados
+    req.body = value;
+    next();
+};
+
+module.exports = {
+    validateWorkOrder,
+    workOrderSchema
 };
 ```
 
-**Beneficios de la implementación:**
-- Respuestas de error consistentes
-- Logging automático de errores
-- Clasificación de errores por tipo
-- Ocultación de detalles internos en producción
+**Características avanzadas:**
+- ✅ **Validación declarativa:** Esquemas legibles y mantenibles
+- ✅ **Mensajes personalizados:** Errores específicos
 
-## 4. Instalación y Configuración
+- ✅ **Sanitización:** Eliminación de campos no permitidos
+- ✅ **Validación completa:** Retorna todos los errores, no solo el primero
+- ✅ **Transformación de datos:** Limpia y normaliza la entrada
 
-### 4.1 Requisitos del Sistema
-- **Node.js:** v14.0 o superior
-- **npm:** v6.0 o superior
-- **Sistema Operativo:** Compatible con Windows, macOS, Linux
+### 3.4 Middleware de Manejo de Errores (`errorHandler.js`)
 
-### 4.2 Proceso de Instalación
+**Propósito:** Capturar y manejar todos los errores de la aplicación de forma centralizada.
 
-1. **Clonar el repositorio:**
-   ```bash
-   git clone [URL_DEL_REPOSITORIO]
-   cd GMAO-API
-   ```
+```javascript
+const logger = require('./logger');
 
-2. **Instalar dependencias:**
-   ```bash
-   npm install
-   ```
+const errorHandler = (err, req, res, next) => {
+    // Log del error para debugging interno
+    console.error(`[ERROR] ${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+    console.error(`Error: ${err.message}`);
+    console.error(`Stack: ${err.stack}`);
+    
+    // Manejo específico por tipo de error
+    if (err.name === 'ValidationError') {
+        return res.status(400).json({
+            error: 'Error de validación',
+            message: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    if (err.name === 'JsonWebTokenError') {
+        return res.status(401).json({
+            error: 'Token inválido',
+            message: 'El token proporcionado no es válido',
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({
+            error: 'Token expirado',
+            message: 'El token ha expirado, por favor inicie sesión nuevamente',
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    // Error genérico del servidor (no exponer detalles internos)
+    res.status(err.status || 500).json({
+        error: 'Error interno del servidor',
+        message: process.env.NODE_ENV === 'development' 
+            ? err.message 
+            : 'Ha ocurrido un error inesperado',
+        timestamp: new Date().toISOString(),
+        requestId: req.headers['x-request-id'] || 'unknown'
+    });
+};
 
-3. **Configurar variables de entorno:**
-   ```bash
-   # Crear archivo .env
-   echo "PORT=3000" > .env
-   echo "JWT_SECRET=mi_clave_secreta_super_segura_2024" >> .env
-   echo "USERNAME=admin" >> .env
-   echo "PASSWORD=admin123" >> .env
-   ```
+module.exports = errorHandler;
+```
 
-4. **Ejecutar la aplicación:**
-   ```bash
-   # Desarrollo
-   npm run dev
-   
-   # Producción
-   npm start
-   ```
+**Funcionalidades implementadas:**
+- ✅ **Logging completo:** Registra errores con contexto completo
+- ✅ **Clasificación de errores:** Manejo específico por tipo
+- ✅ **Seguridad:** Oculta detalles internos en producción  
+- ✅ **Debugging:** Información detallada en desarrollo
+- ✅ **Trazabilidad:** Incluye timestamp y request ID
 
-### 4.3 Verificación de la Instalación
-Una vez iniciado el servidor, verificar el funcionamiento accediendo a:
-- **Endpoint de salud:** `GET http://localhost:3000/`
-- **Documentación de la API:** Disponible en el endpoint raíz
+### 3.5 Integración de Middlewares en Express
+
+En `server.js`, los middlewares se aplican en el orden correcto:
+
+```javascript
+const express = require('express');
+const cors = require('cors');
+const logger = require('./middlewares/logger');
+const errorHandler = require('./middlewares/errorHandler');
+
+const app = express();
+
+// Middlewares globales (se ejecutan en todas las rutas)
+app.use(logger);                    // 1. Logging de todas las peticiones
+app.use(cors());                    // 2. Configuración CORS
+app.use(express.json());            // 3. Parsing JSON
+app.use(express.urlencoded({ extended: true })); // 4. Parsing URL-encoded
+
+// Rutas de la aplicación
+app.use('/api/auth', authRoutes);
+app.use('/api/work-orders', workOrderRoutes);
+
+// Middleware de error (debe ir AL FINAL)
+app.use(errorHandler);              // 5. Manejo centralizado de errores
+```
+
+**Orden de ejecución crítico:**
+1. **Logger** debe ir primero para capturar todas las peticiones
+2. **CORS y parsers** antes que las rutas
+3. **Rutas** en el medio donde se aplican middlewares específicos
+4. **Error handler** AL FINAL para capturar todos los errores
+
+## 4. API Endpoints y Funcionalidades
+
+### 4.1 Sistema de Autenticación
+
+**Login:** `POST /api/auth/login`
+```json
+// Request
+{
+  "username": "admin", 
+  "password": "admin123"
+}
+
+// Response (200)
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "type": "Bearer",
+    "expiresIn": "24h"
+  }
+}
+```
+
+**Verificación:** `GET /api/auth/verify` (requiere token)
+
+### 4.2 Gestión de Órdenes de Trabajo
+
+#### Endpoints Públicos (solo lectura)
+- `GET /api/work-orders` - Listar todas las órdenes
+- `GET /api/work-orders/:id` - Obtener orden específica  
+- `GET /api/work-orders/stats` - Estadísticas del sistema
+- `GET /api/work-orders?estado=pendiente&tecnico=juan` - Filtros
+
+#### Endpoints Protegidos (requieren autenticación)
+- `POST /api/work-orders` - Crear orden
+- `PUT /api/work-orders/:id` - Actualizar orden
+- `DELETE /api/work-orders/:id` - Eliminar orden
+
+### 4.3 Modelo de Datos
+
+```javascript
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000", // UUID v4
+  "titulo": "Reparar bomba principal",
+  "descripcion": "La bomba tiene una fuga en el sello mecánico",
+  "fecha_programada": "2025-07-15",
+  "estado": "pendiente", // pendiente | en_progreso | finalizada
+  "tecnico": "Juan Pérez",
+  "fecha_creacion": "2025-06-28T10:30:00.000Z",
+  "fecha_actualizacion": "2025-06-28T10:30:00.000Z"
+}
+```
 
 ## 5. Estructura del Proyecto y Organización del Código
 
@@ -406,12 +587,6 @@ curl http://localhost:3000/api/work-orders
 
 ### 8.2 Vulnerabilidades y Consideraciones
 
-#### 8.2.1 Áreas de Mejora
-- **Implementar rate limiting**
-- **Añadir HTTPS en producción**
-- **Implementar refresh tokens**
-- **Añadir validación CSRF**
-
 ## 9. Conclusiones Técnicas
 
 ### 9.1 Objetivos Cumplidos
@@ -459,107 +634,3 @@ curl http://localhost:3000/api/work-orders
 - **Persistencia:** Sistema de archivos inadecuado para producción
 - **Concurrencia:** Operaciones síncronas limitan el rendimiento
 - **Escalabilidad horizontal:** Arquitectura actual no soporta múltiples instancias
-
-## 10. Observaciones y Mejoras Futuras
-
-### 10.1 Observaciones del Desarrollo
-
-#### 10.1.1 Proceso de Desarrollo
-Durante el desarrollo se observó que:
-- La arquitectura modular facilitó el desarrollo incremental
-- Los middlewares personalizados mejoraron significativamente la mantenibilidad
-- La validación declarativa redujo considerablemente los errores en tiempo de ejecución
-
-#### 10.1.2 Decisiones Técnicas Relevantes
-- **Elección de JWT sobre sessions:** Facilitó la escalabilidad stateless
-- **Uso de Joi sobre validación manual:** Mejoró la legibilidad y mantenimiento
-- **Implementación de middleware personalizado:** Proporcionó mayor control sobre el flujo de la aplicación
-
-### 10.2 Roadmap de Mejoras
-
-#### 10.2.1 Corto Plazo (1-2 semanas)
-- [ ] **Implementar paginación** en listados de órdenes
-- [ ] **Añadir filtros avanzados** (fechas, rangos)
-- [ ] **Implementar logging estructurado** (Winston)
-- [ ] **Añadir validación de configuración** de entorno
-
-#### 10.2.2 Mediano Plazo (1-2 meses)
-- [ ] **Migración a base de datos** (PostgreSQL/MongoDB)
-- [ ] **Implementar tests unitarios** y de integración
-- [ ] **Documentación con Swagger/OpenAPI**
-- [ ] **Sistema de notificaciones** por email
-
-#### 10.2.3 Largo Plazo (3-6 meses)
-- [ ] **Implementar microservicios** architecture
-- [ ] **Añadir cache** con Redis
-- [ ] **Sistema de métricas** y monitoring
-- [ ] **Interface web** (React/Vue.js)
-
-### 10.3 Reflexiones Académicas
-
-#### 10.3.1 Aplicación de Conceptos Teóricos
-El proyecto permitió aplicar exitosamente:
-- **Principios SOLID:** Especialmente Single Responsibility y Dependency Inversion
-- **Patrones de diseño:** Middleware, Repository, Factory (para UUIDs)
-- **Arquitectura limpia:** Separación clara entre capas de la aplicación
-
-#### 10.3.2 Competencias Desarrolladas
-- **Desarrollo backend:** Dominio de Node.js y Express.js
-- **Diseño de APIs:** Implementación de RESTful services
-- **Seguridad:** Comprensión práctica de autenticación JWT
-- **Arquitectura de software:** Aplicación de patrones y principios
-
-## 11. Referencias y Recursos
-
-### 11.1 Documentación Técnica
-- [Express.js Official Documentation](https://expressjs.com/)
-- [JSON Web Tokens (RFC 7519)](https://tools.ietf.org/html/rfc7519)
-- [Joi Validation Library](https://joi.dev/)
-- [Node.js Best Practices](https://github.com/goldbergyoni/nodebestpractices)
-
-### 11.2 Repositorio del Proyecto
-**URL del Repositorio:** [Insertar URL de GitHub aquí]
-
-**Estructura de commits:**
-- Commit inicial con estructura base
-- Implementación de autenticación JWT
-- Desarrollo de CRUD de órdenes de trabajo
-- Implementación de middlewares personalizados
-- Documentación y pruebas finales
-
----
-
-## 12. Anexos
-
-### 12.1 Configuración de Entorno de Desarrollo
-
-#### 12.1.1 Dependencias del Proyecto
-```json
-{
-  "dependencies": {
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.0",
-    "joi": "^17.9.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.1.4",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
-  }
-}
-```
-
-### 12.2 Scripts de Utilidad
-
-#### 12.2.1 Script de Inicialización
-```bash
-#!/bin/bash
-# setup.sh - Script de configuración inicial
-npm install
-echo "PORT=3000" > .env
-echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env
-echo "USERNAME=admin" >> .env
-echo "PASSWORD=admin123" >> .env
-echo "Configuración completada. Ejecutar: npm run dev"
-```
