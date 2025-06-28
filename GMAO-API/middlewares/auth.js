@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 // Middleware para verificar autenticación JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
     return res.status(401).json({
@@ -14,7 +14,7 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
-      return next(err); // Pasa el error al middleware de manejo de errores
+      return next(err);
     }
     
     req.user = user;
