@@ -5,7 +5,6 @@ const { sendError, sendJsonResponse } = require('./utils');
 
 const PORT = process.env.PORT || 3000;
 
-// Función para manejar las rutas
 function handleRoutes(req, res) {
   const parsedUrl = url.parse(req.url, true);
   const path = parsedUrl.pathname;
@@ -13,7 +12,6 @@ function handleRoutes(req, res) {
   
   console.log(`${method} ${path}`);
   
-  // Manejar CORS preflight requests
   if (method === 'OPTIONS') {
     res.statusCode = 200;
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,44 +21,35 @@ function handleRoutes(req, res) {
     return;
   }
   
-  // Rutas de la API
   try {
-    // GET /api/rooms - Obtener todas las salas
     if (path === '/api/rooms' && method === 'GET') {
       return controllers.getRooms(req, res);
     }
     
-    // GET /api/rooms/:id - Obtener una sala específica
     if (path.match(/^\/api\/rooms\/[^\/]+$/) && method === 'GET') {
       return controllers.getRoomById(req, res);
     }
     
-    // GET /api/rooms/:id/reservations - Obtener reservas de una sala específica
     if (path.match(/^\/api\/rooms\/[^\/]+\/reservations$/) && method === 'GET') {
       return controllers.getReservationsByRoom(req, res);
     }
     
-    // POST /api/reservations - Crear nueva reserva
     if (path === '/api/reservations' && method === 'POST') {
       return controllers.createReservation(req, res);
     }
     
-    // GET /api/reservations - Obtener todas las reservas
     if (path === '/api/reservations' && method === 'GET') {
       return controllers.getReservations(req, res);
     }
     
-    // DELETE /api/reservations/:id - Cancelar una reserva
     if (path.match(/^\/api\/reservations\/[^\/]+$/) && method === 'DELETE') {
       return controllers.cancelReservation(req, res);
     }
     
-    // Ruta raíz - Documentación de la API
     if (path === '/' && method === 'GET') {
       return sendApiDocumentation(res);
     }
     
-    // Ruta no encontrada
     sendError(res, 404, 'Endpoint no encontrado');
     
   } catch (error) {
@@ -69,7 +58,6 @@ function handleRoutes(req, res) {
   }
 }
 
-// Función para enviar la documentación de la API
 function sendApiDocumentation(res) {
   const documentation = {
     title: "API de Reservas de Salas de Estudio",
@@ -131,15 +119,12 @@ function sendApiDocumentation(res) {
   sendJsonResponse(res, 200, documentation);
 }
 
-// Crear y configurar el servidor
 const server = http.createServer(handleRoutes);
 
-// Manejar errores del servidor
 server.on('error', (error) => {
   console.error('Error del servidor:', error);
 });
 
-// Iniciar el servidor
 server.listen(PORT, () => {
   console.log('🚀 Servidor iniciado exitosamente');
   console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
@@ -155,7 +140,6 @@ server.listen(PORT, () => {
   console.log('  DELETE /api/reservations/:id         - Cancela una reserva');
 });
 
-// Manejar cierre graceful del servidor
 process.on('SIGTERM', () => {
   console.log('📤 Recibida señal SIGTERM, cerrando servidor...');
   server.close(() => {

@@ -1,9 +1,3 @@
-/**
- * Envía una respuesta JSON
- * @param {Object} res - Objeto response de HTTP
- * @param {number} statusCode - Código de estado HTTP
- * @param {Object} data - Datos a enviar
- */
 function sendJsonResponse(res, statusCode, data) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
@@ -13,12 +7,6 @@ function sendJsonResponse(res, statusCode, data) {
   res.end(JSON.stringify(data, null, 2));
 }
 
-/**
- * Envía una respuesta de éxito
- * @param {Object} res - Objeto response de HTTP
- * @param {Object} data - Datos a enviar
- * @param {string} message - Mensaje de éxito
- */
 function sendSuccess(res, data, message = 'Operación exitosa') {
   sendJsonResponse(res, 200, {
     success: true,
@@ -27,12 +15,6 @@ function sendSuccess(res, data, message = 'Operación exitosa') {
   });
 }
 
-/**
- * Envía una respuesta de error
- * @param {Object} res - Objeto response de HTTP
- * @param {number} statusCode - Código de estado HTTP
- * @param {string} message - Mensaje de error
- */
 function sendError(res, statusCode, message) {
   sendJsonResponse(res, statusCode, {
     success: false,
@@ -40,11 +22,6 @@ function sendError(res, statusCode, message) {
   });
 }
 
-/**
- * Parsea el cuerpo de la petición JSON
- * @param {Object} req - Objeto request de HTTP
- * @returns {Promise} - Promise que resuelve con los datos parseados
- */
 function parseRequestBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -69,12 +46,6 @@ function parseRequestBody(req) {
   });
 }
 
-/**
- * Extrae parámetros de la URL
- * @param {string} url - URL completa
- * @param {string} basePath - Ruta base
- * @returns {Object} - Objeto con los parámetros extraídos
- */
 function extractUrlParams(url, basePath) {
   const urlParts = url.split('?')[0].split('/');
   const basePathParts = basePath.split('/');
@@ -91,12 +62,6 @@ function extractUrlParams(url, basePath) {
   return params;
 }
 
-/**
- * Valida los campos requeridos
- * @param {Object} data - Datos a validar
- * @param {Array} requiredFields - Campos requeridos
- * @returns {Object} - Objeto con isValid y mensaje de error
- */
 function validateRequiredFields(data, requiredFields) {
   for (const field of requiredFields) {
     if (!data[field] || data[field].toString().trim() === '') {
@@ -110,11 +75,6 @@ function validateRequiredFields(data, requiredFields) {
   return { isValid: true };
 }
 
-/**
- * Valida formato de fecha (YYYY-MM-DD)
- * @param {string} fecha - Fecha a validar
- * @returns {boolean} - true si es válida, false si no
- */
 function isValidDate(fecha) {
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(fecha)) return false;
@@ -123,11 +83,6 @@ function isValidDate(fecha) {
   return date instanceof Date && !isNaN(date);
 }
 
-/**
- * Valida formato de hora (HH:MM)
- * @param {string} hora - Hora a validar
- * @returns {boolean} - true si es válida, false si no
- */
 function isValidTime(hora) {
   const timeRegex = /^([01]?\d|2[0-3]):[0-5]\d$/;
   return timeRegex.test(hora);
