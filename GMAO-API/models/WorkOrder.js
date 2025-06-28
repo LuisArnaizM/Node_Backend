@@ -1,111 +1,144 @@
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-class WorkOrderModel {
-  constructor() {
-    this.filePath = path.join(__dirname, '../data/ordenes.json');
-  }
-
-  // Leer todas las órdenes de trabajo
-  async getAll() {
-    try {
-      const data = fs.readFileSync(this.filePath, 'utf8');
-      return JSON.parse(data);
-    } catch (error) {
-      console.error('Error al leer las órdenes:', error);
-      return [];
+const WorkOrder = sequelize.define('WorkOrder', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [3, 255]
     }
-  }
-
-  // Obtener una orden por ID
-  async getById(id) {
-    const orders = await this.getAll();
-    return orders.find(order => order.id === id);
-  }
-
-  // Crear una nueva orden de trabajo
-  async create(orderData) {
-    const orders = await this.getAll();
-    const newOrder = {
-      id: uuidv4(),
-      ...orderData,
-      fecha_creacion: new Date().toISOString(),
-      fecha_actualizacion: new Date().toISOString()
-    };
-
-    orders.push(newOrder);
-    await this.saveToFile(orders);
-    return newOrder;
-  }
-
-  // Actualizar una orden de trabajo
-  async update(id, updateData) {
-    const orders = await this.getAll();
-    const orderIndex = orders.findIndex(order => order.id === id);
-
-    if (orderIndex === -1) {
-      return null;
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    validate: {
+      notEmpty: true
     }
-
-    orders[orderIndex] = {
-      ...orders[orderIndex],
-      ...updateData,
-      fecha_actualizacion: new Date().toISOString()
-    };
-
-    await this.saveToFile(orders);
-    return orders[orderIndex];
-  }
-
-  // Eliminar una orden de trabajo
-  async delete(id) {
-    const orders = await this.getAll();
-    const orderIndex = orders.findIndex(order => order.id === id);
-
-    if (orderIndex === -1) {
-      return null;
+  },
+  priority: {
+    type: DataTypes.ENUM('baja', 'media', 'alta', 'critica'),
+    allowNull: false,
+    defaultValue: 'media'
+  },
+  status: {
+    type: DataTypes.ENUM('pendiente', 'en_progreso', 'completada', 'cancelada'),
+    allowNull: false,
+    defaultValue: 'pendiente'
+  },
+  assignedTo: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  estimatedHours: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    validate: {
+      min: 0
     }
-
-    const deletedOrder = orders.splice(orderIndex, 1)[0];
-    await this.saveToFile(orders);
-    return deletedOrder;
-  }
-
-  // Filtrar órdenes por estado
-  async getByStatus(status) {
-    const orders = await this.getAll();
-    return orders.filter(order => order.estado === status);
-  }
-
-  // Buscar órdenes por técnico
-  async getByTechnician(tecnico) {
-    const orders = await this.getAll();
-    return orders.filter(order => 
-      order.tecnico && order.tecnico.toLowerCase().includes(tecnico.toLowerCase())
-    );
-  }
-
-  // Guardar datos en el archivo
-  async saveToFile(data) {
-    try {
-      fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('Error al guardar las órdenes:', error);
-      throw new Error('Error al guardar los datos');
+  },
+  actualHours: {
+    type: DataTypes.DECIMAL(5, 2),
+    allowNull: true,
+    validate: {
+      min: 0
     }
+  },
+  dueDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  equipmentId: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  location: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  cost: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    validate: {
+      min: 0
+    }
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    allowNull: true
   }
+}, {
+  tableName: 'work_orders',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  indexes: [
+    {
+      fields: ['status']
+    },
+    {
+      fields: ['priority']
+    },
+    {
+      fields: ['assignedTo']
+    },
+    {
+      fields: ['createdAt']
+    }
+  ]
+});
 
-  // Obtener estadísticas
-  async getStats() {
-    const orders = await this.getAll();
-    return {
-      total: orders.length,
-      pendientes: orders.filter(o => o.estado === 'pendiente').length,
-      en_progreso: orders.filter(o => o.estado === 'en_progreso').length,
-      finalizadas: orders.filter(o => o.estado === 'finalizada').length
-    };
-  }
-}
+// Métodos de instancia
+WorkOrder.prototype.markAsCompleted = function() {
+  this.status = 'completada';
+  this.completedAt = new Date();
+  return this.save();
+};
 
-module.exports = new WorkOrderModel();
+WorkOrder.prototype.updateProgress = function(actualHours, notes) {
+  this.actualHours = actualHours;
+  if (notes) this.notes = notes;
+  this.status = 'en_progreso';
+  return this.save();
+};
+
+// Métodos estáticos
+WorkOrder.findByStatus = function(status) {
+  return this.findAll({
+    where: { status },
+    order: [['createdAt', 'DESC']]
+  });
+};
+
+WorkOrder.findByPriority = function(priority) {
+  return this.findAll({
+    where: { priority },
+    order: [['createdAt', 'DESC']]
+  });
+};
+
+WorkOrder.findOverdue = function() {
+  return this.findAll({
+    where: {
+      dueDate: {
+        [sequelize.Op.lt]: new Date()
+      },
+      status: {
+        [sequelize.Op.notIn]: ['completada', 'cancelada']
+      }
+    },
+    order: [['dueDate', 'ASC']]
+  });
+};
+
+module.exports = WorkOrder;
