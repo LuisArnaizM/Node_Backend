@@ -259,13 +259,13 @@ curl -X POST http://localhost:3000/api/auth/login \
 ```bash
 curl -X POST http://localhost:3000/api/work-orders \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer TU_TOKEN_AQUI" \
+  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI" \
   -d '{
-    "titulo": "Reparar bomba de agua",
-    "descripcion": "La bomba principal tiene una fuga en la conexión",
-    "fecha_programada": "2024-06-20",
-    "estado": "pendiente",
-    "tecnico": "Juan Pérez"
+    "title": "Reparar bomba de agua",
+    "description": "La bomba principal tiene una fuga en la conexión",
+    "priority": "media",
+    "assignedTo": "Juan Pérez",
+    "dueDate": "2024-06-20T08:00:00Z"
   }'
 ```
 
@@ -273,7 +273,7 @@ curl -X POST http://localhost:3000/api/work-orders \
 ```bash
 curl -X POST http://localhost:3000/api/work-orders \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer TU_TOKEN_AQUI" \
+  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI" \
   -d '{
     "title": "Mantenimiento de Bomba #1",
     "description": "Revisión y mantenimiento preventivo de la bomba principal",
@@ -284,6 +284,17 @@ curl -X POST http://localhost:3000/api/work-orders \
     "equipmentId": "PUMP-001",
     "location": "Planta Principal - Sector A",
     "cost": 150.00
+  }'
+```
+
+### 🆕 Ejemplo Mínimo (solo campos obligatorios)
+```bash
+curl -X POST http://localhost:3000/api/work-orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TU_TOKEN_JWT_AQUI" \
+  -d '{
+    "title": "Reparar bomba de agua",
+    "description": "La bomba principal tiene una fuga en la conexión"
   }'
 ```
 
@@ -350,17 +361,30 @@ curl -w "%{time_total}" http://localhost:3000/api/work-orders/stats
 
 ### Validaciones Originales (mantenidas)
 #### Campos Obligatorios
-- `titulo`: mínimo 3 caracteres
-- `fecha_programada`: formato YYYY-MM-DD
+- `title`: mínimo 3 caracteres, máximo 255
+- `description`: texto obligatorio
 
 #### Estados Válidos
 - `pendiente` (por defecto)
 - `en_progreso`
-- `finalizada`
+- `completada`
+- `cancelada`
+
+#### Prioridades Válidas
+- `baja`
+- `media` (por defecto)
+- `alta`
+- `critica`
 
 #### Campos Opcionales
-- `descripcion`
-- `tecnico`
+- `assignedTo`: técnico asignado
+- `estimatedHours`: horas estimadas
+- `actualHours`: horas reales
+- `dueDate`: fecha límite
+- `equipmentId`: ID del equipo
+- `location`: ubicación
+- `cost`: costo
+- `notes`: notas adicionales
 
 ### 🆕 Validaciones Extendidas (v2.0)
 #### Nuevos Campos Obligatorios
