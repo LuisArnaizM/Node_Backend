@@ -2,6 +2,14 @@
 const errorHandler = (err, req, res, next) => {
   console.error('❌ Error:', err);
 
+  // Manejar errores null o undefined
+  if (!err) {
+    return res.status(500).json({
+      error: 'Error interno del servidor',
+      message: 'Ha ocurrido un error inesperado'
+    });
+  }
+
   // Error de validación de Joi
   if (err.isJoi) {
     return res.status(400).json({
