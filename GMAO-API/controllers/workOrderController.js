@@ -1,5 +1,5 @@
-const WorkOrder = require('../models/WorkOrder');
-const { cacheHelpers } = require('../config/redis');
+const WorkOrder = require('@models/WorkOrder');
+const { cacheHelpers } = require('@config/redis');
 const { Op } = require('sequelize');
 
 class WorkOrderController {

@@ -1,23 +1,26 @@
+// Configurar alias de módulos
+require('module-alias/register');
+
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
 // Importar configuraciones
-const { sequelize } = require('./config/database');
-const { connectRedis } = require('./config/redis');
+const { sequelize } = require('@config/database');
+const { connectRedis } = require('@config/redis');
 
 // Importar middlewares
-const logger = require('./middlewares/logger');
-const errorHandler = require('./middlewares/errorHandler');
-const { helmetConfig, csrfProtection } = require('./middlewares/security');
+const logger = require('@middlewares/logger');
+const errorHandler = require('@middlewares/errorHandler');
+const { helmetConfig, csrfProtection } = require('@middlewares/security');
 
 // Importar rutas
-const authRoutes = require('./routes/authRoutes');
-const workOrderRoutes = require('./routes/workOrderRoutes');
+const authRoutes = require('@routes/authRoutes');
+const workOrderRoutes = require('@routes/workOrderRoutes');
 
 // Importar modelos
-const User = require('./models/User');
-const WorkOrder = require('./models/WorkOrder');
+const User = require('@models/User');
+const WorkOrder = require('@models/WorkOrder');
 
 const app = express();
 

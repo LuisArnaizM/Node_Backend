@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const workOrderController = require('../controllers/workOrderController');
-const { authenticateToken, requireAdminOrTechnician, requireAdmin } = require('../middlewares/auth');
-const { validateData, workOrderSchema, updateWorkOrderSchema } = require('../middlewares/validation');
+const workOrderController = require('@controllers/workOrderController');
+const { authenticateToken, requireAdminOrTechnician, requireAdmin } = require('@middlewares/auth');
+const { validateData, workOrderSchema, updateWorkOrderSchema } = require('@middlewares/validation');
 
 // Usar middlewares de prueba si estamos en modo de prueba
 const isTestMode = process.env.NODE_ENV === 'test';
 const securityMiddleware = isTestMode 
-  ? require('../middlewares/testSecurity')
-  : require('../middlewares/security');
+  ? require('@middlewares/testSecurity')
+  : require('@middlewares/security');
 
 const { generalLimiter, createLimiter, sanitizeInput } = securityMiddleware;
 

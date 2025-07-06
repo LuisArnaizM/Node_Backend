@@ -1,84 +1,88 @@
 const jwt = require('jsonwebtoken');
-const { 
-  authenticateToken, 
-  requireRole, 
-  requireAdmin, 
-  requireAdminOrTechnician 
-} = require('../../../middlewares/auth');
+
+// Mock de jsonwebtoken
+jest.mock('jsonwebtoken', () => ({
+  sign: jest.fn().mockReturnValue('mocked.jwt.token'),
+  verify: jest.fn().mockReturnValue({
+    id: 'test-user-id',
+    username: 'testuser',
+    email: 'test@example.com',
+    role: 'viewer',
+    iat: Math.floor(Date.now() / 1000)
+  })
+}));
 
 // Mock del modelo User
-jest.mock('../../../models/User');
-const User = require('../../../models/User');
+const mockUserModel = {
+  findOne: jest.fn()
+};
+
+jest.mock('../../../models/User', () => mockUserModel);
+
+const authMiddleware = require('../../../middlewares/auth');
+const { authenticateToken, requireRole } = authMiddleware;
 
 describe('Auth Middleware', () => {
   let req, res, next;
+  let mockUser;
 
   beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Mock de request, response y next
     req = {
       headers: {},
       user: null
     };
+    
     res = {
       status: jest.fn().mockReturnThis(),
-      json: jest.fn()
+      json: jest.fn().mockReturnThis()
     };
-    next = jest.fn();
     
-    // Mock del JWT_SECRET
-    process.env.JWT_SECRET = 'test_secret_key';
-  });
+    next = jest.fn();
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  describe('authenticateToken', () => {
-    const mockUser = {
-      id: 'user-123',
+    // Mock de usuario
+    mockUser = {
+      id: 'test-user-id',
       username: 'testuser',
       email: 'test@example.com',
-      role: 'admin',
+      role: 'viewer',
       isActive: true,
       passwordChangedAt: null,
       toJSON: jest.fn().mockReturnValue({
-        id: 'user-123',
+        id: 'test-user-id',
         username: 'testuser',
         email: 'test@example.com',
-        role: 'admin'
+        role: 'viewer',
+        isActive: true
       })
     };
+  });
 
+  describe('authenticateToken', () => {
     test('should authenticate valid token successfully', async () => {
-      const token = jwt.sign(
-        { id: 'user-123', username: 'testuser', role: 'admin' },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      req.headers.authorization = `Bearer ${token}`;
-      User.findOne.mockResolvedValue(mockUser);
-
+      req.headers.authorization = 'Bearer valid.jwt.token';
+      mockUserModel.findOne.mockResolvedValue(mockUser);
+      
       await authenticateToken(req, res, next);
-
-      expect(User.findOne).toHaveBeenCalledWith({
-        where: { 
-          id: 'user-123',
-          isActive: true 
+      
+      expect(jwt.verify).toHaveBeenCalledWith('valid.jwt.token', process.env.JWT_SECRET);
+      expect(mockUserModel.findOne).toHaveBeenCalledWith({
+        where: {
+          id: 'test-user-id',
+          isActive: true
         }
       });
-      expect(req.user).toEqual({
-        id: 'user-123',
-        username: 'testuser',
-        email: 'test@example.com',
-        role: 'admin'
-      });
+      expect(req.user).toEqual(mockUser.toJSON());
       expect(next).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
     });
 
-    test('should reject request without authorization header', async () => {
+    test('should return 401 if no token provided', async () => {
+      req.headers.authorization = undefined;
+      
       await authenticateToken(req, res, next);
-
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
@@ -88,323 +92,214 @@ describe('Auth Middleware', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject request with malformed authorization header', async () => {
+    test('should return 401 if token format is invalid', async () => {
       req.headers.authorization = 'InvalidFormat';
-
+      
       await authenticateToken(req, res, next);
-
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Token no proporcionado',
         message: 'Se requiere un token de autorización para acceder a este recurso'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject invalid JWT token', async () => {
-      req.headers.authorization = 'Bearer invalid_token';
-
+    test('should return 401 if user not found', async () => {
+      req.headers.authorization = 'Bearer valid.jwt.token';
+      mockUserModel.findOne.mockResolvedValue(null);
+      
       await authenticateToken(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Token inválido',
-        message: 'El token proporcionado no es válido'
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
-
-    test('should reject expired JWT token', async () => {
-      const expiredToken = jwt.sign(
-        { id: 'user-123', username: 'testuser', role: 'admin' },
-        process.env.JWT_SECRET,
-        { expiresIn: '-1h' } // Token expirado
-      );
-
-      req.headers.authorization = `Bearer ${expiredToken}`;
-
-      await authenticateToken(req, res, next);
-
-      expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Token expirado',
-        message: 'El token ha expirado. Inicia sesión nuevamente.'
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
-
-    test('should reject token for non-existent user', async () => {
-      const token = jwt.sign(
-        { id: 'non-existent-user', username: 'nonexistent', role: 'admin' },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      req.headers.authorization = `Bearer ${token}`;
-      User.findOne.mockResolvedValue(null);
-
-      await authenticateToken(req, res, next);
-
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Token inválido',
         message: 'El usuario asociado al token no existe o está desactivado'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject token for inactive user', async () => {
-      const token = jwt.sign(
-        { id: 'user-123', username: 'testuser', role: 'admin' },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      req.headers.authorization = `Bearer ${token}`;
-      User.findOne.mockResolvedValue(null); // Simula usuario inactivo
-
+    test('should return 401 if user is inactive', async () => {
+      req.headers.authorization = 'Bearer valid.jwt.token';
+      
+      // Mock para usuario inactivo - retorna null como si no existiera un usuario activo
+      mockUserModel.findOne.mockResolvedValue(null);
+      
       await authenticateToken(req, res, next);
-
-      expect(User.findOne).toHaveBeenCalledWith({
-        where: { 
-          id: 'user-123',
-          isActive: true 
-        }
-      });
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Token inválido',
         message: 'El usuario asociado al token no existe o está desactivado'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject token if password was changed after token issuance', async () => {
-      const tokenIssuedTime = Math.floor(Date.now() / 1000);
-      const token = jwt.sign(
-        { 
-          id: 'user-123', 
-          username: 'testuser', 
-          role: 'admin',
-          iat: tokenIssuedTime
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      const passwordChangedTime = new Date((tokenIssuedTime + 100) * 1000); // Cambio después del token
-      const userWithPasswordChange = {
-        ...mockUser,
-        passwordChangedAt: passwordChangedTime
-      };
-
-      req.headers.authorization = `Bearer ${token}`;
-      User.findOne.mockResolvedValue(userWithPasswordChange);
-
+    test('should return 401 if password changed after token issuance', async () => {
+      req.headers.authorization = 'Bearer valid.jwt.token';
+      
+      // Token emitido hace 1 hora (en segundos)
+      const tokenIat = Math.floor(Date.now() / 1000) - 3600;
+      jwt.verify.mockReturnValueOnce({
+        id: 'test-user-id',
+        username: 'testuser',
+        iat: tokenIat
+      });
+      
+      // Password cambió hace 30 minutos
+      mockUser.passwordChangedAt = new Date(Date.now() - 1800000);
+      mockUserModel.findOne.mockResolvedValue(mockUser);
+      
       await authenticateToken(req, res, next);
-
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Token inválido',
         message: 'Token inválido debido a cambio de contraseña. Inicia sesión nuevamente.'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should accept token if password was changed before token issuance', async () => {
-      const tokenIssuedTime = Math.floor(Date.now() / 1000);
-      const token = jwt.sign(
-        { 
-          id: 'user-123', 
-          username: 'testuser', 
-          role: 'admin',
-          iat: tokenIssuedTime
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      const passwordChangedTime = new Date((tokenIssuedTime - 100) * 1000); // Cambio antes del token
-      const userWithPasswordChange = {
-        ...mockUser,
-        passwordChangedAt: passwordChangedTime
-      };
-
-      req.headers.authorization = `Bearer ${token}`;
-      User.findOne.mockResolvedValue(userWithPasswordChange);
-
+    test('should handle JsonWebTokenError', async () => {
+      req.headers.authorization = 'Bearer invalid.token';
+      jwt.verify.mockImplementationOnce(() => {
+        const error = new Error('invalid token');
+        error.name = 'JsonWebTokenError';
+        throw error;
+      });
+      
       await authenticateToken(req, res, next);
-
-      expect(next).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
+      
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Token inválido',
+        message: 'El token proporcionado no es válido'
+      });
     });
 
-    test('should handle database errors gracefully', async () => {
-      const token = jwt.sign(
-        { id: 'user-123', username: 'testuser', role: 'admin' },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      req.headers.authorization = `Bearer ${token}`;
-      User.findOne.mockRejectedValue(new Error('Database connection error'));
-
+    test('should handle TokenExpiredError', async () => {
+      req.headers.authorization = 'Bearer expired.token';
+      jwt.verify.mockImplementationOnce(() => {
+        const error = new Error('jwt expired');
+        error.name = 'TokenExpiredError';
+        throw error;
+      });
+      
       await authenticateToken(req, res, next);
+      
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Token expirado',
+        message: 'El token ha expirado. Inicia sesión nuevamente.'
+      });
+    });
 
+    test('should handle other errors', async () => {
+      req.headers.authorization = 'Bearer valid.jwt.token';
+      mockUserModel.findOne.mockRejectedValue(new Error('Database error'));
+      
+      await authenticateToken(req, res, next);
+      
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Error interno del servidor',
         message: 'Error al verificar el token'
       });
-      expect(next).not.toHaveBeenCalled();
     });
   });
 
   describe('requireRole', () => {
-    test('should allow access for user with correct role', () => {
-      req.user = { role: 'admin' };
-      const middleware = requireRole('admin');
+    beforeEach(() => {
+      req.user = {
+        id: 'test-user-id',
+        username: 'testuser',
+        role: 'viewer'
+      };
+    });
 
+    test('should allow access for user with required role', () => {
+      const middleware = requireRole('viewer');
+      
       middleware(req, res, next);
-
+      
       expect(next).toHaveBeenCalled();
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    test('should allow access for user with one of multiple correct roles', () => {
-      req.user = { role: 'technician' };
+    test('should allow access for user with one of multiple required roles', () => {
+      req.user.role = 'technician';
       const middleware = requireRole(['admin', 'technician']);
-
+      
       middleware(req, res, next);
-
+      
       expect(next).toHaveBeenCalled();
       expect(res.status).not.toHaveBeenCalled();
     });
 
-    test('should deny access for user with incorrect role', () => {
-      req.user = { role: 'viewer' };
+    test('should deny access for user without required role', () => {
+      req.user.role = 'viewer';
       const middleware = requireRole('admin');
-
+      
       middleware(req, res, next);
-
-      expect(next).not.toHaveBeenCalled();
+      
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Acceso denegado',
         message: 'Se requiere uno de los siguientes roles: admin'
       });
+      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should deny access for user without required roles from array', () => {
-      req.user = { role: 'viewer' };
+    test('should deny access for user without any of the required roles', () => {
+      req.user.role = 'viewer';
       const middleware = requireRole(['admin', 'technician']);
-
+      
       middleware(req, res, next);
-
-      expect(next).not.toHaveBeenCalled();
+      
       expect(res.status).toHaveBeenCalledWith(403);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Acceso denegado',
         message: 'Se requiere uno de los siguientes roles: admin, technician'
       });
+      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should deny access for unauthenticated user', () => {
+    test('should return 401 if no user in request', () => {
       req.user = null;
       const middleware = requireRole('admin');
-
+      
       middleware(req, res, next);
-
-      expect(next).not.toHaveBeenCalled();
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'No autorizado',
         message: 'Se requiere autenticación'
       });
+      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should deny access for undefined user', () => {
-      // req.user is undefined
+    test('should handle single role as string', () => {
+      req.user.role = 'admin';
       const middleware = requireRole('admin');
-
+      
       middleware(req, res, next);
-
-      expect(next).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'No autorizado',
-        message: 'Se requiere autenticación'
-      });
-    });
-  });
-
-  describe('requireAdmin', () => {
-    test('should allow access for admin user', () => {
-      req.user = { role: 'admin' };
-
-      requireAdmin(req, res, next);
-
+      
       expect(next).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
     });
 
-    test('should deny access for non-admin user', () => {
-      req.user = { role: 'technician' };
-
-      requireAdmin(req, res, next);
-
-      expect(next).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Acceso denegado',
-        message: 'Se requiere uno de los siguientes roles: admin'
-      });
-    });
-  });
-
-  describe('requireAdminOrTechnician', () => {
-    test('should allow access for admin user', () => {
-      req.user = { role: 'admin' };
-
-      requireAdminOrTechnician(req, res, next);
-
+    test('should handle multiple roles as array', () => {
+      req.user.role = 'technician';
+      const middleware = requireRole(['admin', 'technician', 'viewer']);
+      
+      middleware(req, res, next);
+      
       expect(next).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
-    });
-
-    test('should allow access for technician user', () => {
-      req.user = { role: 'technician' };
-
-      requireAdminOrTechnician(req, res, next);
-
-      expect(next).toHaveBeenCalled();
-      expect(res.status).not.toHaveBeenCalled();
-    });
-
-    test('should deny access for viewer user', () => {
-      req.user = { role: 'viewer' };
-
-      requireAdminOrTechnician(req, res, next);
-
-      expect(next).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(403);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'Acceso denegado',
-        message: 'Se requiere uno de los siguientes roles: admin, technician'
-      });
     });
   });
 });

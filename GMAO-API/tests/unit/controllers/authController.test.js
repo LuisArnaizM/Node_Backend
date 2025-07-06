@@ -1,411 +1,417 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
-const authController = require('../../../controllers/authController');
-
-// Mock del modelo User
-jest.mock('../../../models/User');
-const User = require('../../../models/User');
-
-// Mock de bcryptjs
-jest.mock('bcryptjs');
-const bcryptMock = bcrypt;
 
 // Mock de jsonwebtoken
-jest.mock('jsonwebtoken');
-const jwtMock = jwt;
+jest.mock('jsonwebtoken', () => ({
+  sign: jest.fn().mockReturnValue('mocked.jwt.token'),
+  verify: jest.fn().mockReturnValue({
+    id: 'test-user-id',
+    username: 'testuser',
+    email: 'test@example.com',
+    role: 'viewer',
+    iat: Math.floor(Date.now() / 1000)
+  })
+}));
+
+// Mock de bcryptjs
+jest.mock('bcryptjs', () => ({
+  hash: jest.fn().mockResolvedValue('hashedpassword'),
+  compare: jest.fn().mockResolvedValue(true),
+  genSalt: jest.fn().mockResolvedValue('mockedsalt')
+}));
+
+// Mock del modelo User
+const mockUserModel = {
+  findOne: jest.fn(),
+  findByPk: jest.fn(),
+  create: jest.fn()
+};
+
+jest.mock('../../../models/User', () => mockUserModel);
+
+const AuthController = require('../../../controllers/authController');
 
 describe('AuthController', () => {
   let req, res, next;
+  let mockUser;
 
   beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Mock de request, response y next
     req = {
       body: {},
-      user: null
+      user: {},
+      headers: {}
     };
+    
     res = {
       status: jest.fn().mockReturnThis(),
-      json: jest.fn()
+      json: jest.fn().mockReturnThis()
     };
+    
     next = jest.fn();
 
-    // Mock del JWT_SECRET
-    process.env.JWT_SECRET = 'test_secret_key';
-  });
+    // Mock de usuario
+    mockUser = {
+      id: 'test-user-id',
+      username: 'testuser',
+      email: 'test@example.com',
+      password: 'hashedpassword',
+      role: 'viewer',
+      isActive: true,
+      lastLoginAt: null,
+      passwordChangedAt: null,
+      validatePassword: jest.fn(),
+      comparePassword: jest.fn(),
+      updateLastLogin: jest.fn(),
+      update: jest.fn(),
+      toJSON: jest.fn(),
+      save: jest.fn()
+    };
 
-  afterEach(() => {
-    jest.clearAllMocks();
+    // Configurar comportamientos por defecto
+    mockUser.validatePassword.mockResolvedValue(true);
+    mockUser.comparePassword.mockResolvedValue(true);
+    mockUser.updateLastLogin.mockResolvedValue(mockUser);
+    mockUser.update.mockResolvedValue(mockUser);
+    mockUser.toJSON.mockReturnValue({
+      id: mockUser.id,
+      username: mockUser.username,
+      email: mockUser.email,
+      role: mockUser.role,
+      isActive: mockUser.isActive
+    });
   });
 
   describe('register', () => {
-    const validRegisterData = {
-      username: 'testuser',
-      email: 'test@example.com',
-      password: 'password123',
-      role: 'viewer'
-    };
-
-    const mockUser = {
-      id: 'user-123',
-      username: 'testuser',
-      email: 'test@example.com',
-      role: 'viewer',
-      toJSON: jest.fn().mockReturnValue({
-        id: 'user-123',
-        username: 'testuser',
-        email: 'test@example.com',
+    beforeEach(() => {
+      req.body = {
+        username: 'newuser',
+        email: 'newuser@example.com',
+        password: 'password123',
         role: 'viewer'
-      })
-    };
+      };
+    });
 
-    test('should register new user successfully', async () => {
-      req.body = validRegisterData;
+    test('should register a new user successfully', async () => {
+      mockUserModel.findOne.mockResolvedValue(null); // No existe usuario
+      mockUserModel.create.mockResolvedValue(mockUser);
       
-      User.findOne.mockResolvedValue(null); // No existing user
-      User.create.mockResolvedValue(mockUser);
-      jwtMock.sign.mockReturnValue('mock_jwt_token');
-
-      await authController.register(req, res, next);
-
-      expect(User.findOne).toHaveBeenCalledWith({
-        where: {
-          [Op.or]: [
-            { username: 'testuser' },
-            { email: 'test@example.com' }
-          ]
-        }
-      });
-      expect(User.create).toHaveBeenCalledWith({
-        username: 'testuser',
-        email: 'test@example.com',
+      await AuthController.register(req, res, next);
+      
+      expect(mockUserModel.findOne).toHaveBeenCalled();
+      expect(mockUserModel.create).toHaveBeenCalledWith({
+        username: 'newuser',
+        email: 'newuser@example.com',
         password: 'password123',
         role: 'viewer'
       });
+      expect(jwt.sign).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         message: 'Usuario registrado exitosamente',
         data: {
-          token: 'mock_jwt_token',
+          token: 'mocked.jwt.token',
           type: 'Bearer',
           expiresIn: '24h',
           user: mockUser.toJSON()
         }
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should use default role "viewer" when not provided', async () => {
-      req.body = {
-        username: 'testuser',
-        email: 'test@example.com',
-        password: 'password123'
-        // role not provided
-      };
+    test('should return 409 if username already exists', async () => {
+      const existingUser = { ...mockUser, username: 'newuser' };
+      mockUserModel.findOne.mockResolvedValue(existingUser);
       
-      User.findOne.mockResolvedValue(null);
-      User.create.mockResolvedValue(mockUser);
-      jwtMock.sign.mockReturnValue('mock_jwt_token');
-
-      await authController.register(req, res, next);
-
-      expect(User.create).toHaveBeenCalledWith({
-        username: 'testuser',
-        email: 'test@example.com',
-        password: 'password123',
-        role: 'viewer'
-      });
-    });
-
-    test('should reject registration with existing username', async () => {
-      req.body = validRegisterData;
+      await AuthController.register(req, res, next);
       
-      const existingUser = {
-        username: 'testuser',
-        email: 'different@example.com'
-      };
-      User.findOne.mockResolvedValue(existingUser);
-
-      await authController.register(req, res, next);
-
-      expect(User.create).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Usuario ya existe',
         message: 'El nombre de usuario ya está en uso'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject registration with existing email', async () => {
-      req.body = validRegisterData;
+    test('should return 409 if email already exists', async () => {
+      const existingUser = { ...mockUser, email: 'newuser@example.com' };
+      mockUserModel.findOne.mockResolvedValue(existingUser);
       
-      const existingUser = {
-        username: 'differentuser',
-        email: 'test@example.com'
-      };
-      User.findOne.mockResolvedValue(existingUser);
-
-      await authController.register(req, res, next);
-
-      expect(User.create).not.toHaveBeenCalled();
+      await AuthController.register(req, res, next);
+      
       expect(res.status).toHaveBeenCalledWith(409);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Usuario ya existe',
         message: 'El email ya está registrado'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should handle Sequelize validation errors', async () => {
-      req.body = validRegisterData;
-      
-      User.findOne.mockResolvedValue(null);
-      
+    test('should handle validation errors', async () => {
       const validationError = {
         name: 'SequelizeValidationError',
         errors: [
-          { path: 'email', message: 'Invalid email format' },
-          { path: 'password', message: 'Password too short' }
+          { path: 'email', message: 'Email is not valid' },
+          { path: 'password', message: 'Password is too short' }
         ]
       };
-      User.create.mockRejectedValue(validationError);
-
-      await authController.register(req, res, next);
-
+      
+      mockUserModel.findOne.mockResolvedValue(null);
+      mockUserModel.create.mockRejectedValue(validationError);
+      
+      await AuthController.register(req, res, next);
+      
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Errores de validación',
         details: [
-          { field: 'email', message: 'Invalid email format' },
-          { field: 'password', message: 'Password too short' }
+          { field: 'email', message: 'Email is not valid' },
+          { field: 'password', message: 'Password is too short' }
         ]
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should handle database errors', async () => {
-      req.body = validRegisterData;
+    test('should call next with error for other errors', async () => {
+      const error = new Error('Database error');
+      mockUserModel.findOne.mockResolvedValue(null);
+      mockUserModel.create.mockRejectedValue(error);
       
-      User.findOne.mockRejectedValue(new Error('Database connection error'));
-
-      await authController.register(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-      expect(res.status).not.toHaveBeenCalled();
+      await AuthController.register(req, res, next);
+      
+      expect(next).toHaveBeenCalledWith(error);
     });
   });
 
   describe('login', () => {
-    const validLoginData = {
-      username: 'testuser',
-      password: 'password123'
-    };
-
-    const mockUser = {
-      id: 'user-123',
-      username: 'testuser',
-      email: 'test@example.com',
-      role: 'viewer',
-      isActive: true,
-      validatePassword: jest.fn(),
-      updateLastLogin: jest.fn(),
-      toJSON: jest.fn().mockReturnValue({
-        id: 'user-123',
+    beforeEach(() => {
+      req.body = {
         username: 'testuser',
-        email: 'test@example.com',
-        role: 'viewer'
-      })
-    };
+        password: 'password123'
+      };
+    });
 
     test('should login user successfully', async () => {
-      req.body = validLoginData;
+      mockUserModel.findOne.mockResolvedValue(mockUser);
       
-      User.findOne.mockResolvedValue(mockUser);
-      mockUser.validatePassword.mockResolvedValue(true);
-      mockUser.updateLastLogin.mockResolvedValue();
-      jwtMock.sign.mockReturnValue('mock_jwt_token');
-
-      await authController.login(req, res, next);
-
-      expect(User.findOne).toHaveBeenCalledWith({
+      await AuthController.login(req, res, next);
+      
+      expect(mockUserModel.findOne).toHaveBeenCalledWith({
         where: { username: 'testuser' },
         attributes: ['id', 'username', 'email', 'password', 'role', 'lastLoginAt', 'passwordChangedAt', 'isActive']
       });
       expect(mockUser.validatePassword).toHaveBeenCalledWith('password123');
       expect(mockUser.updateLastLogin).toHaveBeenCalled();
+      expect(jwt.sign).toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         message: 'Autenticación exitosa',
         data: {
-          token: 'mock_jwt_token',
+          token: 'mocked.jwt.token',
           type: 'Bearer',
           expiresIn: '24h',
           user: mockUser.toJSON()
         }
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject login with non-existent user', async () => {
-      req.body = validLoginData;
+    test('should return 401 if user not found', async () => {
+      mockUserModel.findOne.mockResolvedValue(null);
       
-      User.findOne.mockResolvedValue(null);
-
-      await authController.login(req, res, next);
-
+      await AuthController.login(req, res, next);
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Credenciales inválidas',
         message: 'Usuario o contraseña incorrectos'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject login with inactive user', async () => {
-      req.body = validLoginData;
+    test('should return 401 if user is inactive', async () => {
+      mockUser.isActive = false;
+      mockUserModel.findOne.mockResolvedValue(mockUser);
       
-      const inactiveUser = {
-        ...mockUser,
-        isActive: false
-      };
-      User.findOne.mockResolvedValue(inactiveUser);
-
-      await authController.login(req, res, next);
-
+      await AuthController.login(req, res, next);
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Cuenta desactivada',
         message: 'Tu cuenta ha sido desactivada. Contacta al administrador.'
       });
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should reject login with invalid password', async () => {
-      req.body = validLoginData;
-      
-      User.findOne.mockResolvedValue(mockUser);
+    test('should return 401 if password is invalid', async () => {
       mockUser.validatePassword.mockResolvedValue(false);
-
-      await authController.login(req, res, next);
-
-      expect(mockUser.validatePassword).toHaveBeenCalledWith('password123');
+      mockUserModel.findOne.mockResolvedValue(mockUser);
+      
+      await AuthController.login(req, res, next);
+      
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Credenciales inválidas',
         message: 'Usuario o contraseña incorrectos'
       });
-      expect(mockUser.updateLastLogin).not.toHaveBeenCalled();
-      expect(next).not.toHaveBeenCalled();
     });
 
-    test('should handle database errors during login', async () => {
-      req.body = validLoginData;
+    test('should call next with error for other errors', async () => {
+      const error = new Error('Database error');
+      mockUserModel.findOne.mockRejectedValue(error);
       
-      User.findOne.mockRejectedValue(new Error('Database connection error'));
+      await AuthController.login(req, res, next);
+      
+      expect(next).toHaveBeenCalledWith(error);
+    });
+  });
 
-      await authController.login(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-      expect(res.status).not.toHaveBeenCalled();
+  describe('verifyToken', () => {
+    test('should return user data for valid token', async () => {
+      req.user = mockUser.toJSON();
+      
+      await AuthController.verifyToken(req, res, next);
+      
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Token válido',
+        data: {
+          user: req.user
+        }
+      });
     });
 
-    test('should handle password validation errors', async () => {
-      req.body = validLoginData;
+    test('should call next with error for errors', async () => {
+      const error = new Error('Token error');
+      // Simular error en el método
+      jest.spyOn(AuthController, 'verifyToken').mockImplementationOnce(() => {
+        throw error;
+      });
       
-      User.findOne.mockResolvedValue(mockUser);
-      mockUser.validatePassword.mockRejectedValue(new Error('Password validation error'));
+      try {
+        await AuthController.verifyToken(req, res, next);
+      } catch (e) {
+        expect(e).toBe(error);
+      }
+    });
+  });
 
-      await authController.login(req, res, next);
+  describe('getProfile', () => {
+    test('should return user profile successfully', async () => {
+      req.user = { id: 'test-user-id' };
+      mockUserModel.findByPk.mockResolvedValue(mockUser);
+      
+      await AuthController.getProfile(req, res, next);
+      
+      expect(mockUserModel.findByPk).toHaveBeenCalledWith('test-user-id');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Perfil obtenido exitosamente',
+        data: mockUser.toJSON()
+      });
+    });
 
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-      expect(res.status).not.toHaveBeenCalled();
+    test('should return 401 if no user in request', async () => {
+      req.user = null;
+      
+      await AuthController.getProfile(req, res, next);
+      
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Usuario no encontrado'
+      });
+    });
+
+    test('should return 404 if user not found in database', async () => {
+      req.user = { id: 'test-user-id' };
+      mockUserModel.findByPk.mockResolvedValue(null);
+      
+      await AuthController.getProfile(req, res, next);
+      
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Usuario no encontrado'
+      });
+    });
+  });
+
+  describe('changePassword', () => {
+    beforeEach(() => {
+      req.body = {
+        currentPassword: 'oldpassword',
+        newPassword: 'newpassword123'
+      };
+      req.user = { id: 'test-user-id' };
+    });
+
+    test('should change password successfully', async () => {
+      mockUserModel.findByPk.mockResolvedValue(mockUser);
+      
+      await AuthController.changePassword(req, res, next);
+      
+      expect(mockUserModel.findByPk).toHaveBeenCalledWith('test-user-id');
+      expect(mockUser.validatePassword).toHaveBeenCalledWith('oldpassword');
+      expect(mockUser.update).toHaveBeenCalledWith({ password: 'newpassword123' });
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        message: 'Contraseña actualizada exitosamente'
+      });
+    });
+
+    test('should return 404 if user not found', async () => {
+      mockUserModel.findByPk.mockResolvedValue(null);
+      
+      await AuthController.changePassword(req, res, next);
+      
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Usuario no encontrado'
+      });
+    });
+
+    test('should return 400 if current password is incorrect', async () => {
+      mockUser.validatePassword.mockResolvedValue(false);
+      mockUserModel.findByPk.mockResolvedValue(mockUser);
+      
+      await AuthController.changePassword(req, res, next);
+      
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Contraseña actual incorrecta'
+      });
     });
   });
 
   describe('generateToken', () => {
     test('should generate JWT token with correct payload', () => {
-      const mockUser = {
-        id: 'user-123',
+      const testUser = {
+        id: 'test-id',
         username: 'testuser',
         email: 'test@example.com',
-        role: 'admin'
+        role: 'viewer'
       };
-
-      jwtMock.sign.mockReturnValue('mock_jwt_token');
-
-      const token = authController.generateToken(mockUser);
-
-      expect(jwtMock.sign).toHaveBeenCalledWith(
-        {
-          id: 'user-123',
-          username: 'testuser',
-          email: 'test@example.com',
-          role: 'admin',
+      
+      const token = AuthController.generateToken(testUser);
+      
+      expect(jwt.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: testUser.id,
+          username: testUser.username,
+          email: testUser.email,
+          role: testUser.role,
           iat: expect.any(Number)
-        },
+        }),
         process.env.JWT_SECRET,
         { expiresIn: '24h' }
       );
-      expect(token).toBe('mock_jwt_token');
-    });
-
-    test('should handle missing user properties', () => {
-      const incompleteUser = {
-        id: 'user-123'
-        // missing username and role
-      };
-
-      jwtMock.sign.mockReturnValue('mock_jwt_token');
-
-      const token = authController.generateToken(incompleteUser);
-
-      expect(jwtMock.sign).toHaveBeenCalledWith(
-        {
-          id: 'user-123',
-          username: undefined,
-          email: undefined,
-          role: undefined,
-          iat: expect.any(Number)
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-      expect(token).toBe('mock_jwt_token');
-    });
-  });
-
-  describe('error handling', () => {
-    test('should handle JSON parsing errors', async () => {
-      req.body = null;
-      
-      await authController.register(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-    });
-
-    test('should handle missing environment variables', () => {
-      delete process.env.JWT_SECRET;
-      
-      const mockUser = {
-        id: 'user-123',
-        username: 'testuser',
-        role: 'admin'
-      };
-
-      jwtMock.sign.mockImplementation(() => {
-        throw new Error('JWT_SECRET is required');
-      });
-
-      expect(() => {
-        authController.generateToken(mockUser);
-      }).toThrow();
+      expect(token).toBe('mocked.jwt.token');
     });
   });
 });

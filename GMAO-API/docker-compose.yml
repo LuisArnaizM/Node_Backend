@@ -1,0 +1,81 @@
+services:
+  # Aplicación Node.js
+  gmao-api:
+    build: .
+    container_name: gmao-api
+    ports:
+      - "3000:3000"
+    env_file: .env
+    environment:
+    # Variables del servidor
+    - NODE_ENV=${NODE_ENV:-production}
+    - PORT=${PORT:-3000}
+    - LOG_LEVEL=${LOG_LEVEL:-info}
+    
+    # Variables de autenticación
+    - USERNAME=${USERNAME}
+    - PASSWORD=${PASSWORD}
+    - JWT_SECRET=${JWT_SECRET}
+    
+    # Variables de base de datos (adaptadas para Docker)
+    - DB_HOST=mysql
+    - DB_PORT=3306
+    - DB_NAME=${DB_NAME}
+    - DB_USER=${DB_USER}
+    - DB_PASSWORD=${DB_PASSWORD}
+    - REDIS_HOST=${REDIS_HOST:-redis}
+    - REDIS_PORT=${REDIS_PORT:-6379}
+    - REDIS_PASSWORD=${REDIS_PASSWORD}
+    
+    # Variables de seguridad
+    - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:80}
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - gmao-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  mysql:
+    image: mysql:8.0
+    container_name: gmao-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    env_file:
+      - .env
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - gmao-network
+    
+  redis:
+    image: redis:7-alpine
+    container_name: gmao-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    env_file: .env
+    command: redis-server --appendonly yes --bind 0.0.0.0
+    networks:
+      - gmao-network
+    restart: unless-stopped
+
+# Volúmenes persistentes
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Red personalizada
+networks:
+  gmao-network:
+    driver: bridge
