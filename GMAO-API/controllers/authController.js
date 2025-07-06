@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const User = require('../models/User');
+const User = require('@models/User');
 
 class AuthController {
   // POST /api/auth/register - Registro de nuevo usuario

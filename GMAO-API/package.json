@@ -6,8 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "start:db": "node server-db.js",
+    "start:local": "node -r dotenv/config server.js dotenv_config_path=.env.local",
     "dev": "nodemon server.js",
     "dev:db": "nodemon server-db.js",
+    "dev:local": "nodemon -r dotenv/config server.js dotenv_config_path=.env.local",
     "test": "NODE_ENV=test jest",
     "test:watch": "NODE_ENV=test jest --watch",
     "test:coverage": "NODE_ENV=test jest --coverage",
@@ -36,12 +38,22 @@
     "hpp": "^0.2.3",
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
+    "module-alias": "^2.2.3",
     "morgan": "^1.10.0",
     "mysql2": "^3.14.1",
     "redis": "^5.5.6",
     "sequelize": "^6.37.7",
     "uuid": "^9.0.1",
     "xss-clean": "^0.1.4"
+  },
+  "_moduleAliases": {
+    "@": ".",
+    "@controllers": "./controllers",
+    "@models": "./models", 
+    "@middlewares": "./middlewares",
+    "@routes": "./routes",
+    "@config": "./config",
+    "@utils": "./utils"
   },
   "devDependencies": {
     "jest": "^29.0.0",

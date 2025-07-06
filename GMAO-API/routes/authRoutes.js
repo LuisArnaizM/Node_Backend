@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const authController = require('../controllers/authController');
-const { authenticateToken, requireAdmin } = require('../middlewares/auth');
+const authController = require('@controllers/authController');
+const { authenticateToken, requireAdmin } = require('@middlewares/auth');
 
 // Usar middlewares de prueba si estamos en modo de prueba
 const isTestMode = process.env.NODE_ENV === 'test';
 const securityMiddleware = isTestMode 
-  ? require('../middlewares/testSecurity')
-  : require('../middlewares/security');
+  ? require('@middlewares/testSecurity')
+  : require('@middlewares/security');
 
 const { 
   authLimiter, 

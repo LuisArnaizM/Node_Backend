@@ -1,6 +1,6 @@
-const { sequelize } = require('../config/database');
-const User = require('./User');
-const WorkOrder = require('./WorkOrder');
+const { sequelize } = require('@config/database');
+const User = require('@models/User');
+const WorkOrder = require('@models/WorkOrder');
 
 // Definir asociaciones
 WorkOrder.belongsTo(User, { foreignKey: 'assignedTo', as: 'assignedUser' });

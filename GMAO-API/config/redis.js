@@ -1,22 +1,48 @@
 const redis = require('redis');
 require('dotenv').config();
 
-// Configuración de Redis
-const redisClient = redis.createClient({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined
-});
+// Debug de configuración
+console.log('🔧 Redis Config Debug:');
+console.log('  REDIS_HOST:', process.env.REDIS_HOST);
+console.log('  REDIS_PORT:', process.env.REDIS_PORT);
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+
+const redisHost = process.env.REDIS_HOST || 'localhost';
+const redisPort = parseInt(process.env.REDIS_PORT) || 6379;
+const redisConfig = {
+  socket: {
+    host: redisHost,
+    port: redisPort,
+    family: 4, // IMPORTANTE: Forzar IPv4
+    connectTimeout: 10000,
+    lazyConnect: true
+  },
+  retryDelayOnFailover: 100,
+  enableReadyCheck: false,
+  maxRetriesPerRequest: null,
+};
+
+if (process.env.REDIS_PASSWORD) {
+  redisConfig.password = process.env.REDIS_PASSWORD;
+}
+const redisClient = redis.createClient(redisConfig);
 
 // Configuración de eventos
 redisClient.on('connect', () => {
-  console.log('Conectado a Redis');
+  console.log(`✅ Conectado a Redis en ${redisHost}:${redisPort}`);
 });
 
 redisClient.on('error', (err) => {
-  console.error('Error de conexión a Redis:', err);
+  console.error(`❌ Error de conexión a Redis (${redisHost}:${redisPort}):`, err);
 });
 
+redisClient.on('end', () => {
+  console.log('🔌 Conexión a Redis cerrada');
+});
+
+redisClient.on('reconnecting', () => {
+  console.log(`🔄 Reconectando a Redis ${redisHost}:${redisPort}...`);
+});
 // Función para conectar a Redis
 const connectRedis = async () => {
   try {
