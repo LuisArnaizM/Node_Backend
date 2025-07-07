@@ -9,6 +9,8 @@ class AuthController {
     try {
       const { username, email, password, role = 'viewer' } = req.body;
 
+      console.log('🔄 Intento de registro para usuario:', username);
+
       // Verificar si el usuario ya existe
       const existingUser = await User.findOne({
         where: {
@@ -20,6 +22,7 @@ class AuthController {
       });
 
       if (existingUser) {
+        console.log('❌ Usuario ya existe:', username);
         return res.status(409).json({
           success: false,
           error: 'Usuario ya existe',
@@ -37,7 +40,9 @@ class AuthController {
         role
       });
 
-      // Generar token JWT
+      console.log('✅ Usuario creado:', username);
+
+      // Generar token JWT - CORREGIDO
       const token = this.generateToken(newUser);
 
       res.status(201).json({
@@ -51,6 +56,7 @@ class AuthController {
         }
       });
     } catch (error) {
+      console.error('❌ Error en register:', error);
       if (error.name === 'SequelizeValidationError') {
         const validationErrors = error.errors.map(err => ({
           field: err.path,
@@ -72,6 +78,8 @@ class AuthController {
     try {
       const { username, password } = req.body;
 
+      console.log('🔐 Intento de login para usuario:', username);
+
       // Buscar usuario en la base de datos
       const user = await User.findOne({
         where: { username },
@@ -79,6 +87,7 @@ class AuthController {
       });
 
       if (!user) {
+        console.log('❌ Usuario no encontrado:', username);
         return res.status(401).json({
           success: false,
           error: 'Credenciales inválidas',
@@ -86,8 +95,11 @@ class AuthController {
         });
       }
 
+      console.log('✅ Usuario encontrado:', user.username);
+
       // Verificar si el usuario está activo
       if (!user.isActive) {
+        console.log('❌ Usuario inactivo:', username);
         return res.status(401).json({
           success: false,
           error: 'Cuenta desactivada',
@@ -99,6 +111,7 @@ class AuthController {
       const isPasswordValid = await user.validatePassword(password);
       
       if (!isPasswordValid) {
+        console.log('❌ Contraseña incorrecta para usuario:', username);
         return res.status(401).json({
           success: false,
           error: 'Credenciales inválidas',
@@ -106,11 +119,15 @@ class AuthController {
         });
       }
 
+      console.log('✅ Contraseña válida para usuario:', username);
+
       // Actualizar último login
       await user.updateLastLogin();
 
-      // Generar token JWT
+      // Generar token JWT - CORREGIDO
       const token = this.generateToken(user);
+
+      console.log('✅ Token generado exitosamente para:', username);
 
       res.json({
         success: true,
@@ -123,6 +140,7 @@ class AuthController {
         }
       });
     } catch (error) {
+      console.error('❌ Error en login:', error);
       next(error);
     }
   }
@@ -140,60 +158,6 @@ class AuthController {
     } catch (error) {
       next(error);
     }
-  }
-
-  // POST /api/auth/change-password - Cambiar contraseña
-  async changePassword(req, res, next) {
-    try {
-      const { currentPassword, newPassword } = req.body;
-      const userId = req.user.id;
-
-      // Buscar usuario con password
-      const user = await User.findOne({
-        where: { id: userId },
-        attributes: ['id', 'username', 'password']
-      });
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          error: 'Usuario no encontrado'
-        });
-      }
-
-      // Verificar contraseña actual
-      const isCurrentPasswordValid = await user.comparePassword(currentPassword);
-      
-      if (!isCurrentPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          error: 'Contraseña actual incorrecta'
-        });
-      }
-
-      // Actualizar contraseña (se hashea automáticamente en el hook)
-      await user.update({ password: newPassword });
-
-      res.json({
-        success: true,
-        message: 'Contraseña actualizada exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Método auxiliar para generar tokens JWT
-  static generateToken(user) {
-    const payload = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      iat: Math.floor(Date.now() / 1000)
-    };
-
-    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
   }
 
   // GET /api/auth/profile - Obtener perfil del usuario
@@ -251,7 +215,6 @@ class AuthController {
         });
       }
 
-      // Actualizar contraseña (se hashea automáticamente en el hook)
       await user.update({ password: newPassword });
 
       res.json({
@@ -263,22 +226,34 @@ class AuthController {
     }
   }
 
-  // Método auxiliar para generar tokens JWT
   generateToken(user) {
-    const payload = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      iat: Math.floor(Date.now() / 1000)
-    };
+    try {
+      const payload = {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        iat: Math.floor(Date.now() / 1000)
+      };
 
-    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+      console.log('🔑 Generando token para usuario:', user.username);
+      return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+    } catch (error) {
+      console.error('❌ Error generando token:', error);
+      throw error;
+    }
   }
 }
 
-// Exportar tanto la clase como la instancia
+// Crear instancia y hacer bind de los métodos
 const authController = new AuthController();
-authController.AuthController = AuthController;
+
+// Hacer bind de todos los métodos para preservar el contexto de 'this'
+authController.register = authController.register.bind(authController);
+authController.login = authController.login.bind(authController);
+authController.verifyToken = authController.verifyToken.bind(authController);
+authController.getProfile = authController.getProfile.bind(authController);
+authController.changePassword = authController.changePassword.bind(authController);
+authController.generateToken = authController.generateToken.bind(authController);
 
 module.exports = authController;
