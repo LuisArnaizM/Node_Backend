@@ -2,7 +2,76 @@
 
 API REST desarrollada con Express.js para la gestión de órdenes de trabajo en un sistema GMAO (Gestión de Mantenimiento Asistido por Ordenador).
 
-## 🔄 Evolución del Proyecto
+## � Inicio Rápido con Docker
+
+La forma más rápida de levantar la API es usando Docker. Solo necesitas tener Docker y Docker Compose instalados:
+
+### 📦 Opción 1: Docker Compose (Recomendado)
+
+```bash
+# Clonar el repositorio
+git clone <tu-repositorio>
+cd GMAO_Node/Node_Backend/GMAO-API
+
+# Levantar todos los servicios (API + MySQL + Redis)
+docker-compose up -d
+
+# Verificar que todo esté funcionando
+curl http://localhost:3000/
+
+# Ver logs en tiempo real
+docker-compose logs -f
+```
+
+### 🐳 Opción 2: Solo el contenedor de la API
+
+```bash
+# Construir la imagen
+docker build -t gmao-api .
+
+# Ejecutar el contenedor
+docker run -d \
+  --name gmao-api-container \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  gmao-api
+
+# Verificar que esté corriendo
+docker ps
+curl http://localhost:3000/
+```
+
+### ⚙️ Variables de entorno para Docker
+
+Crea un archivo `.env` basado en `.env.example`:
+
+```bash
+# Copiar archivo de ejemplo
+cp .env.example .env
+
+# Editar configuración
+nano .env
+```
+
+### 🛑 Comandos útiles
+
+```bash
+# Parar todos los servicios
+docker-compose down
+
+# Reconstruir y levantar
+docker-compose up -d --build
+
+# Ver logs de un servicio específico
+docker-compose logs -f gmao-api
+
+# Acceder al contenedor
+docker-compose exec gmao-api sh
+```
+
+---
+
+## �🔄 Evolución del Proyecto
 
 Este proyecto ha evolucionado desde el trabajo inicial de **"Librerías de Backend con Node.js"** hacia una solución empresarial robusta:
 
